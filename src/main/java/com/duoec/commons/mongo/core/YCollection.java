@@ -9,7 +9,6 @@ import com.duoec.commons.mongo.reflection.dto.ClassMate;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.mongodb.MongoClient;
-import com.mongodb.MongoNamespace;
 import com.mongodb.bulk.BulkWriteResult;
 import com.mongodb.client.*;
 import com.mongodb.client.model.*;
@@ -31,11 +30,9 @@ import java.util.List;
  * Created by ycoe on 17/1/19.
  */
 public abstract class YCollection<TDocument> {
-    private static final Logger logger = LoggerFactory.getLogger(BaseDao.class);
+    private static final Logger logger = LoggerFactory.getLogger(YCollection.class);
 
     protected static final long SLOW_QUERY_TIME = 800;
-
-    private MongoNamespace namespace;
 
     private MongoCollection<TDocument> mongoCollection;
 
@@ -49,18 +46,6 @@ public abstract class YCollection<TDocument> {
 
     public String getNamespace() {
         return getDatabaseName() + getCollectionName();
-    }
-
-    public CodecRegistry getCodecRegistry() {
-        return getCodecRegistry(getDocumentClass());
-    }
-
-    public <NewTDocument> YCollection<NewTDocument> withDocumentClass(Class<NewTDocument> returnClass) {
-        return (YCollection<NewTDocument>) getDocumentMongoCollection().withDocumentClass(returnClass);
-    }
-
-    public MongoCollection<TDocument> withCodecRegistry(CodecRegistry codecRegistry) {
-        return getDocumentMongoCollection().withCodecRegistry(codecRegistry);
     }
 
     /**
@@ -714,8 +699,30 @@ public abstract class YCollection<TDocument> {
         return mongoCollection;
     }
 
-    public <NewDocument> MongoCollection<NewDocument> getDocumentMongoCollection(String collectionName, Class<NewDocument> clazz) {
-        return getDocumentMongoCollection(getDatabaseName(), collectionName, clazz);
+    public <NewDocument> YCollection<NewDocument> getYCollection(final String collectionName, Class<NewDocument> clazz) {
+        final String databaseName = getDatabaseName();
+        final YMongoClient client = getYMongoClient();
+        return new YCollection<NewDocument>() {
+            @Override
+            protected String getDatabaseName() {
+                return databaseName;
+            }
+
+            @Override
+            protected String getCollectionName() {
+                return collectionName;
+            }
+
+            @Override
+            public Class<NewDocument> getDocumentClass() {
+                return clazz;
+            }
+
+            @Override
+            protected YMongoClient getYMongoClient() {
+                return client;
+            }
+        };
     }
 
     public <NewDocument> MongoCollection<NewDocument> getDocumentMongoCollection(String databaseName, String collectionName, Class<NewDocument> clazz) {
@@ -752,7 +759,7 @@ public abstract class YCollection<TDocument> {
         Document query = new Document("_id", name);
         Document increase = new Document("seq", step);
         Document updateQuery = new Document("$inc", increase);
-        MongoCollection collection = getDocumentMongoCollection("counters", null);
+        MongoCollection collection = getDocumentMongoCollection(getDatabaseName(), "counters", null);
         Document result = (Document) collection.findOneAndUpdate(query, updateQuery);
         if (result == null) {
             //先插入
