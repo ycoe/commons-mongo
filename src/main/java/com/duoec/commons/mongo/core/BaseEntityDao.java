@@ -53,7 +53,7 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
         ClassMate classMate = ReflectionUtils.getClassMate(clazz);
         AutoIncrementInfo autoIncrementInfo = classMate.getAutoIncrementInfo();
 
-        if (autoIncrementInfo.isAutoIncrement()) {
+        if (autoIncrementInfo != null && autoIncrementInfo.isAutoIncrement()) {
             Object entityId = doc.get(ID);
             if (entityId == null || "0".equals(entityId.toString())) {
                 //参见文档:https://docs.mongodb.org/manual/tutorial/create-an-auto-incrementing-field/

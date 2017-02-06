@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
  * Created by ycoe on 16/7/5.
  */
 @Service
-public class HouseDao extends BaseEntityDao<House> {
+public class HouseDao extends BaseTestEntityDao<House> {
     @Override
     protected String getCollectionName() {
         return "house";

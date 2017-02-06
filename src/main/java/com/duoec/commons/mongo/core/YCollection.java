@@ -40,7 +40,7 @@ public abstract class YCollection<TDocument> {
 
     protected abstract String getCollectionName();
 
-    public abstract Class<TDocument> getDocumentClass();
+    protected abstract Class<TDocument> getDocumentClass();
 
     protected abstract YMongoClient getYMongoClient();
 

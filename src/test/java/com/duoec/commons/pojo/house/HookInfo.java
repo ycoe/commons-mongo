@@ -5,7 +5,7 @@ package com.duoec.commons.pojo.house;
  */
 public class HookInfo {
     /**
-     * 房多多id
+     * id
      */
     private Integer fddId;
     /**
