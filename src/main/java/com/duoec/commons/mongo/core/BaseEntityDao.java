@@ -22,19 +22,22 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
     public static final String ID = "_id";
 
     /**
-     * 通过查询条件更新一条记录
+     * 通过查询条件更新一条记录，更新仅对设置有值的字段进行修改，不$unset为空的字段
+     * 如果需要$unset为空字段，请使用update(T entity)方法
      *
      * @param query
      * @param entity
      */
     public void updateOne(Bson query, T entity) {
         Document doc = getDocument(entity, MongoConverter.OPTION_UPDATE);
-        doc.remove(ID);
         super.updateOne(query, new Document("$set", doc));
     }
 
     /**
-     * 本方法更新会清空数据为null的字段，如果不需要清空，请使用updateOne()方法！
+     * 本方法仅会更新实体内定义且未被标识为@Ignore(update=true)的字段
+     * 如果属性值为空，则会被删除
+     * 嵌套document/list会被直接覆盖
+     * 如果不需要清空，请使用updateOne()方法！
      *
      * @param entity
      */
@@ -47,21 +50,27 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
         updateOne(Filters.eq(ID, id), updateData);
     }
 
-    protected Document getDocument(T entity, int option) {
-        Document doc = MongoConverter.toDocument(entity);
-        Class clazz = entity.getClass();
-        ClassMate classMate = ReflectionUtils.getClassMate(clazz);
-        AutoIncrementInfo autoIncrementInfo = classMate.getAutoIncrementInfo();
+    public Document getDocument(T entity, int option) {
+        Document doc = MongoConverter.toDocument(entity, option);
 
-        if (autoIncrementInfo != null && autoIncrementInfo.isAutoIncrement()) {
-            Object entityId = doc.get(ID);
-            if (entityId == null || "0".equals(entityId.toString())) {
-                //参见文档:https://docs.mongodb.org/manual/tutorial/create-an-auto-incrementing-field/
-                Object id = getNextSequence(autoIncrementInfo);
-                doc.put(ID, id);
-                FieldMate fieldMate = classMate.getFieldMate("id");
-                ReflectionUtils.setField(fieldMate, entity, id); //写入entity
+        if ((option & MongoConverter.OPTION_INSERT) == MongoConverter.OPTION_INSERT) {
+            //如果是insert
+            Class clazz = entity.getClass();
+            ClassMate classMate = ReflectionUtils.getClassMate(clazz);
+            AutoIncrementInfo autoIncrementInfo = classMate.getAutoIncrementInfo();
+            if (autoIncrementInfo != null && autoIncrementInfo.isAutoIncrement()) {
+                Object entityId = doc.get(ID);
+                if (entityId == null || "0".equals(entityId.toString())) {
+                    //参见文档:https://docs.mongodb.org/manual/tutorial/create-an-auto-incrementing-field/
+                    Object id = getNextSequence(autoIncrementInfo);
+                    doc.put(ID, id);
+                    FieldMate fieldMate = classMate.getFieldMate("id");
+                    ReflectionUtils.setField(fieldMate, entity, id); //写入entity
+                }
             }
+        } else if ((option & MongoConverter.OPTION_UPDATE) == MongoConverter.OPTION_UPDATE) {
+            //如果是update
+            doc.remove(ID);
         }
         return doc;
     }

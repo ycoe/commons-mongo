@@ -22,6 +22,7 @@ import java.util.*;
  * Created by ycoe on 16/3/18.
  */
 public class MongoConverter {
+    public static final int OPTION_NULL = 0;
     public static final int OPTION_READ = 1;
     public static final int OPTION_INSERT = 2;
     public static final int OPTION_UPDATE = 4;
@@ -161,12 +162,11 @@ public class MongoConverter {
     }
 
     public static <T> Document toDocument(T entity) {
-        return toDocument(entity, true, 0);
+        return toDocument(entity, true, OPTION_NULL);
     }
 
     /**
-     *
-     * @param entity 类实例
+     * @param entity  类实例
      * @param options 操作，可使用当前类的 OPTION_INSERT | OPTION_READ | OPTION_UPDATE，主要用于过滤@Ignore标识的字段
      * @param <T>
      * @return
@@ -221,7 +221,7 @@ public class MongoConverter {
                     value = toListDocument((List) value, options);
                 } else if (fieldMate.isMap()) {
                     //Map
-                    value = toMapDocument((Map) value, fieldMate);
+                    value = toMapDocument((Map) value);
                 } else {
                     //普通实体
                     value = toDocument(value, false, options);
@@ -239,7 +239,7 @@ public class MongoConverter {
         return doc;
     }
 
-    private static Document toMapDocument(Map value, FieldMate fieldMate) {
+    private static Document toMapDocument(Map value) {
         Document doc = new Document();
         value.keySet().forEach(key -> {
             if (key.getClass() != String.class) {
@@ -249,8 +249,9 @@ public class MongoConverter {
         });
         if (doc.isEmpty()) {
             return null;
+        } else {
+            return doc;
         }
-        return doc;
     }
 
     private static List toListDocument(List value, int options) {
@@ -267,23 +268,21 @@ public class MongoConverter {
                 listDoc.add(doc);
             }
         }
-        return listDoc;
+        if (listDoc.isEmpty()) {
+            return null;
+        } else {
+            return listDoc;
+        }
     }
 
     public static <T> Document getUpdateDocument(T entity) {
-        Document doc = getUpdateData(null, entity);
-        Document setFields = (Document) doc.get("$set");
-        if (setFields != null && setFields.containsKey("id")) {
-            setFields.remove("id");
-        }
-        return doc;
+        UpdateDoc updateDoc = getUpdateData(null, entity);
+        return updateDoc.toDocument();
     }
 
-    private static Document getUpdateData(String parents, Object entity) {
+    private static UpdateDoc getUpdateData(String parentPaths, Object entity) {
+        UpdateDoc updateDoc = new UpdateDoc();
         ClassMate classMate = ReflectionUtils.getClassMate(entity.getClass());
-        Document updateData = new Document();
-        Document setFields = new Document();
-        Document unsetFields = new Document();
         for (Map.Entry<String, FieldMate> entry : classMate.getFieldMateMap().entrySet()) {
             FieldMate fieldMate = entry.getValue();
             Ignore ignore = fieldMate.getIgnore();
@@ -297,89 +296,90 @@ public class MongoConverter {
             String fieldName = entry.getKey();
             if (value == null) {
                 // 需要$unset掉
-                putUnsetDocument(parents, unsetFields, fieldName);
+                putUnsetDocument(parentPaths, updateDoc, fieldName);
                 continue;
             }
 
-            if (!fieldMate.isSimpleType()) {
-                //非基础类型：map / list / 类
-                if (fieldMate.isList()) {
-                    if (!ClassUtils.isSimpleType(fieldMate.getGenericType())) {
-                        //如果泛型是不简单类型
-                        value = getListDocument(value);
-                    } else {
-                        value = null;
-                    }
-                } else if (fieldMate.isMap()) {
-                    if (!ClassUtils.isSimpleType(fieldMate.getGenericType())) {
-                        //如果泛型是不简单类型
-                        value = getMapDocument(value);
-                    } else {
-                        value = null;
-                    }
-                } else {
-                    Document itemData = getUpdateData(null, value);
-                    if (itemData.containsKey("$set")) {
-                        value = itemData.get("$set");
-
-                        if (itemData.containsKey("$unset")) {
-                            Document unsetDoc = (Document) itemData.get("$unset");
-                            String currentParent = (parents == null) ? fieldName : parents + "." + fieldName;
-                            unsetDoc.keySet().forEach(key -> putUnsetDocument(currentParent, unsetFields, key));
-                        }
-                    } else {
-                        value = null;
-                    }
-                }
+            if (fieldMate.isSimpleType()) {
+                //简单类型
+                updateDoc.addSet((parentPaths == null) ? fieldName : parentPaths + "." + fieldName, value);
+                continue;
             }
 
-            if (value == null) {
-                putUnsetDocument(parents, unsetFields, fieldName);
+            //非简单类型
+            if (fieldMate.isList()) {
+                // List
+                value = getListDocument((List) value, fieldMate);
+                updateDoc.addSet((parentPaths == null) ? fieldName : parentPaths + "." + fieldName, value);
+                continue;
+            } else if (fieldMate.isMap()) {
+                // Map
+                value = getMapDocument(value, fieldMate);
+                updateDoc.addSet((parentPaths == null) ? fieldName : parentPaths + "." + fieldName, value);
+                continue;
             } else {
-                //基础类型
-                setFields.put(fieldName, value);
+                //JavaBean
+                UpdateDoc itemUpdateDoc = getUpdateData(null, value);
+                Document setDocs = itemUpdateDoc.getSetDocs();
+                if (setDocs != null && !setDocs.isEmpty()) {
+                    updateDoc.addSet((parentPaths == null) ? fieldName : parentPaths + "." + fieldName, setDocs);
+                } else {
+                    putUnsetDocument(parentPaths, updateDoc, fieldName);
+                }
+                continue;
             }
         }
 
-        if (!setFields.isEmpty()) {
-            updateData.put("$set", setFields);
-        }
-        if (!unsetFields.isEmpty()) {
-            updateData.put("$unset", unsetFields);
-        }
-
-        return updateData;
+        return updateDoc;
     }
 
-    private static Document getMapDocument(Object value) {
-        Map<String, Object> mapValue = (Map<String, Object>) value;
-        Document mapDoc = new Document();
-        for (Map.Entry<String, Object> itemEntry : mapValue.entrySet()) {
-            Document itemData = getUpdateData(null, itemEntry.getValue());
-            if (itemData.containsKey("$set")) {
-                mapDoc.put(itemEntry.getKey(), itemData.get("$set"));
+    private static List getListDocument(List listValue, FieldMate fieldMate) {
+        List listDocs = Lists.newArrayList();
+        if (!ClassUtils.isSimpleType(fieldMate.getGenericType())) {
+            //如果泛型是不简单类型
+            for (Object item : listValue) {
+                UpdateDoc itemData = getUpdateData(null, item);
+                Document setDocs = itemData.getSetDocs();
+                if (setDocs != null) {
+                    listDocs.add(setDocs);
+                }
+            }
+        } else {
+            //简单类型
+            for (Object item : listValue) {
+                listDocs.add(item);
             }
         }
+
+        return listDocs;
+    }
+
+    private static Document getMapDocument(Object value, FieldMate fieldMate) {
+        Map<String, Object> mapValue = (Map<String, Object>) value;
+        Document mapDoc = new Document();
+        if (!ClassUtils.isSimpleType(fieldMate.getGenericType())) {
+            //如果泛型是不简单类型
+            for (Map.Entry<String, Object> itemEntry : mapValue.entrySet()) {
+                UpdateDoc itemData = getUpdateData(null, itemEntry.getValue());
+                Document setDocs = itemData.getSetDocs();
+                if (setDocs != null) {
+                    mapDoc.put(itemEntry.getKey(), setDocs);
+                }
+            }
+        } else {
+            for (Map.Entry<String, Object> itemEntry : mapValue.entrySet()) {
+                mapDoc.put(itemEntry.getKey(), itemEntry.getValue());
+            }
+        }
+
         return mapDoc;
     }
 
-    private static List getListDocument(Object value) {
-        List listValue = (List) value;
-        List<Document> documents = Lists.newArrayList();
-        for (Object item : listValue) {
-            Document itemData = getUpdateData(null, item);
-            if (itemData.containsKey("$set")) {
-                documents.add((Document) itemData.get("$set"));
-            }
-        }
-        return documents;
-    }
-
-    private static void putUnsetDocument(String parents, Document setUnsetFields, String fieldName) {
+    private static void putUnsetDocument(String parents, UpdateDoc updateDoc, String fieldName) {
         if (Strings.isNullOrEmpty(parents)) {
-            setUnsetFields.put(fieldName, true);
+            updateDoc.addUnset(fieldName, true);
         } else {
-            setUnsetFields.put(parents + "." + fieldName, true);
+            updateDoc.addUnset(parents + "." + fieldName, true);
         }
     }
 

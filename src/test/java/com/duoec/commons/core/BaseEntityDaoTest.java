@@ -1,9 +1,11 @@
 package com.duoec.commons.core;
 
 import com.duoec.commons.dao.HouseDao;
+import com.duoec.commons.mongo.MongoConverter;
 import com.duoec.commons.pojo.house.House;
 import com.duoec.commons.test.BaseJunitTest;
 import com.google.common.collect.Lists;
+import org.bson.Document;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -23,7 +25,7 @@ public class BaseEntityDaoTest extends BaseJunitTest {
 
     @Test
     public void update() throws Exception {
-        House house = houseDao.getEntityById(10201);
+        House house = houseDao.getEntityById(10202);
         List<String> tags = Lists.newArrayList("推荐", "热门");
         house.setTags(tags);
 
@@ -32,7 +34,9 @@ public class BaseEntityDaoTest extends BaseJunitTest {
 
     @Test
     public void getDocument() throws Exception {
-
+        House house = houseDao.getEntityById(10202);
+        Document doc = houseDao.getDocument(house, MongoConverter.OPTION_UPDATE);
+        System.out.println(doc.toJson());
     }
 
     @Test

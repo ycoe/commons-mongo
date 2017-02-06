@@ -77,6 +77,7 @@ public class YCodec<T> implements Codec<T> {
         ClassMate classMate = getClassMate(clazz);
         T entity = newInstance(clazz);
         reader.readStartDocument();
+        boolean isEmpty = true;
         while (reader.readBsonType() != BsonType.END_OF_DOCUMENT) {
             String name = reader.readName();
             if (ID_FIELD_NAME.equals(name) && isMainDocument) {
@@ -89,10 +90,17 @@ public class YCodec<T> implements Codec<T> {
                 reader.skipValue();
                 continue;
             }
-            setEntityField(classMate, fieldMate, reader, entity, decoderContext);
+            boolean setSuccess = setEntityField(classMate, fieldMate, reader, entity, decoderContext);
+            if(isEmpty && setSuccess) {
+                isEmpty = false;
+            }
         }
         reader.readEndDocument();
-        return entity;
+        if (isEmpty && !isMainDocument) {
+            return null;
+        } else {
+            return entity;
+        }
     }
 
     private Object readValue(final Type fieldType, final BsonReader reader, final DecoderContext decoderContext) {
@@ -155,19 +163,19 @@ public class YCodec<T> implements Codec<T> {
         return map;
     }
 
-    private void setEntityField(ClassMate classMate, FieldMate fieldMate, BsonReader reader, T entity, DecoderContext decoderContext) {
+    private boolean setEntityField(ClassMate classMate, FieldMate fieldMate, BsonReader reader, T entity, DecoderContext decoderContext) {
         Ignore ignore = fieldMate.getIgnore();
         if (ignore != null) {
             //被标识为@Ignore
             if (ignore.read()) {
                 logger.debug("skip " + classMate.getClazz().getName() + "." + fieldMate.getName() + "'s value");
                 reader.skipValue();
-                return;
+                return false;
             }
         }
         Object value = readValue(fieldMate.getField().getGenericType(), reader, decoderContext);
         if (value == null) {
-            return;
+            return false;
         }
 
         Class<?> fieldType = fieldMate.getField().getType();
@@ -189,6 +197,7 @@ public class YCodec<T> implements Codec<T> {
 //                e1.printStackTrace();
 //            }
 //        }
+        return true;
     }
 
     private T newInstance(Class<T> clazz) {
