@@ -28,7 +28,7 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
      * @param entity
      */
     public void updateOne(Bson query, T entity) {
-        Document doc = getDocument(entity);
+        Document doc = getDocument(entity, MongoConverter.OPTION_UPDATE);
         doc.remove(ID);
         super.updateOne(query, new Document("$set", doc));
     }
@@ -47,7 +47,7 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
         updateOne(Filters.eq(ID, id), updateData);
     }
 
-    protected Document getDocument(T entity) {
+    protected Document getDocument(T entity, int option) {
         Document doc = MongoConverter.toDocument(entity);
         Class clazz = entity.getClass();
         ClassMate classMate = ReflectionUtils.getClassMate(clazz);

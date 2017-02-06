@@ -32,7 +32,7 @@ import java.util.List;
 public abstract class YCollection<TDocument> {
     private static final Logger logger = LoggerFactory.getLogger(YCollection.class);
 
-    protected static final long SLOW_QUERY_TIME = 800;
+    protected static final long SLOW_QUERY_TIME = 80;
 
     private MongoCollection<TDocument> mongoCollection;
 
@@ -45,7 +45,7 @@ public abstract class YCollection<TDocument> {
     protected abstract YMongoClient getYMongoClient();
 
     public String getNamespace() {
-        return getDatabaseName() + getCollectionName();
+        return getDatabaseName() + "." + getCollectionName();
     }
 
     /**
@@ -650,8 +650,8 @@ public abstract class YCollection<TDocument> {
     protected void slowLog(long timeSpan, String message, Object... params) {
         if (timeSpan > SLOW_QUERY_TIME) {
             List<String> paramList = Lists.newArrayList(
-                    getNamespace(),
-                    String.valueOf(timeSpan)
+                    String.valueOf(timeSpan),
+                    getNamespace()
             );
             if (params != null) {
                 for (Object param : params) {
@@ -659,7 +659,7 @@ public abstract class YCollection<TDocument> {
                 }
             }
 
-            logger.info("[{}]慢查询:{}ms, " + message, paramList.toArray());
+            logger.info("慢查询:{}ms, {}." + message, paramList.toArray());
         }
     }
 

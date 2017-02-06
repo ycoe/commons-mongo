@@ -1,4 +1,4 @@
-package com.duoec.commons.reflenction;
+package com.duoec.commons.test.reflenction;
 
 import com.duoec.commons.pojo.house.House;
 import com.duoec.commons.mongo.reflection.ReflectionUtils;

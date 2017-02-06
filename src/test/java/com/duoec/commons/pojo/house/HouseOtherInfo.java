@@ -1,5 +1,7 @@
 package com.duoec.commons.pojo.house;
 
+import com.duoec.commons.mongo.annotation.Ignore;
+
 /**
  * Created by ycoe on 16/7/5.
  */

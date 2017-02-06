@@ -1,14 +1,13 @@
 package com.duoec.commons.mongo;
 
-import com.alibaba.fastjson.JSONObject;
-import com.duoec.commons.mongo.exceptions.YMongoException;
-import com.duoec.commons.mongo.reflection.SimpleTypeConverter;
-import com.duoec.commons.mongo.reflection.dto.FieldMate;
 import com.duoec.commons.mongo.annotation.Ignore;
+import com.duoec.commons.mongo.exceptions.YMongoException;
 import com.duoec.commons.mongo.reflection.BeanUtils;
 import com.duoec.commons.mongo.reflection.ClassUtils;
 import com.duoec.commons.mongo.reflection.ReflectionUtils;
+import com.duoec.commons.mongo.reflection.SimpleTypeConverter;
 import com.duoec.commons.mongo.reflection.dto.ClassMate;
+import com.duoec.commons.mongo.reflection.dto.FieldMate;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -23,6 +22,9 @@ import java.util.*;
  * Created by ycoe on 16/3/18.
  */
 public class MongoConverter {
+    public static final int OPTION_READ = 1;
+    public static final int OPTION_INSERT = 2;
+    public static final int OPTION_UPDATE = 4;
 
     private static final Logger logger = LoggerFactory.getLogger(MongoConverter.class);
 
@@ -56,7 +58,7 @@ public class MongoConverter {
             Ignore ignore = fieldMate.getIgnore();
             if (ignore != null) {
                 //标识为忽略的字段
-                if(ignore.read()) {
+                if (ignore.read()) {
                     continue;
                 }
             }
@@ -159,21 +161,113 @@ public class MongoConverter {
     }
 
     public static <T> Document toDocument(T entity) {
+        return toDocument(entity, true, 0);
+    }
+
+    /**
+     *
+     * @param entity 类实例
+     * @param options 操作，可使用当前类的 OPTION_INSERT | OPTION_READ | OPTION_UPDATE，主要用于过滤@Ignore标识的字段
+     * @param <T>
+     * @return
+     */
+    public static <T> Document toDocument(T entity, int options) {
+        return toDocument(entity, true, options);
+    }
+
+    private static <T> Document toDocument(T entity, boolean isMain, int options) {
         if (entity == null) {
             return null;
         }
 
-        Document doc = Document.parse(JSONObject.toJSONString(entity));
-        Method method;
-        try {
-            method = entity.getClass().getMethod("getId");
-            Object id = method.invoke(entity);
-            doc.put("_id", id);
-            doc.remove("id");
-        } catch (Exception e) {
-            logger.error("设置_id失败!", e);
+        Class clazz = entity.getClass();
+        ClassMate classMate = ReflectionUtils.getClassMate(clazz);
+
+        Document doc = new Document();
+        for (Map.Entry<String, FieldMate> entry : classMate.getFieldMateMap().entrySet()) {
+            String name = entry.getKey();
+            FieldMate fieldMate = entry.getValue();
+
+            if (options > 0) {
+                Ignore ignore = fieldMate.getIgnore();
+                if (ignore != null) {
+                    //如果被标识为@Ignore
+                    if (ignore.insert() && (options & OPTION_INSERT) == OPTION_INSERT) {
+                        continue;
+                    } else if (ignore.read() && (options & OPTION_READ) == OPTION_READ) {
+                        continue;
+                    } else if (ignore.update() && (options & OPTION_UPDATE) == OPTION_UPDATE) {
+                        continue;
+                    }
+                }
+            }
+
+            Object value = ReflectionUtils.getField(fieldMate, entity);
+            if (value == null) {
+                //值为空
+                continue;
+            }
+
+            if (fieldMate.isSimpleType()) {
+                //简单类型
+                if ("id".equals(name) && isMain) {
+                    //写_id
+                    name = "_id";
+                }
+            } else {
+                //非简单类型
+                if (fieldMate.isList()) {
+                    //List
+                    value = toListDocument((List) value, options);
+                } else if (fieldMate.isMap()) {
+                    //Map
+                    value = toMapDocument((Map) value, fieldMate);
+                } else {
+                    //普通实体
+                    value = toDocument(value, false, options);
+                }
+            }
+
+            if (value != null) {
+                doc.put(name, value);
+            }
+        }
+
+        if (doc.isEmpty() && !isMain) {
+            return null;
         }
         return doc;
+    }
+
+    private static Document toMapDocument(Map value, FieldMate fieldMate) {
+        Document doc = new Document();
+        value.keySet().forEach(key -> {
+            if (key.getClass() != String.class) {
+                return;
+            }
+            doc.put(key.toString(), value.get(key));
+        });
+        if (doc.isEmpty()) {
+            return null;
+        }
+        return doc;
+    }
+
+    private static List toListDocument(List value, int options) {
+        if (value.isEmpty()) {
+            return null;
+        }
+        List listDoc = Lists.newArrayList();
+        for (Object item : value) {
+            if (ClassUtils.isSimpleType(item.getClass())) {
+                continue;
+            }
+            Document doc = toDocument(item, false, options);
+            if (doc != null) {
+                listDoc.add(doc);
+            }
+        }
+        return listDoc;
     }
 
     public static <T> Document getUpdateDocument(T entity) {
@@ -253,6 +347,7 @@ public class MongoConverter {
         if (!unsetFields.isEmpty()) {
             updateData.put("$unset", unsetFields);
         }
+
         return updateData;
     }
 
@@ -290,6 +385,7 @@ public class MongoConverter {
 
     /**
      * 获取某个实体的所有字符Projections
+     *
      * @param clazz
      * @return
      */
@@ -303,7 +399,7 @@ public class MongoConverter {
             FieldMate fieldMate = entry.getValue();
             Ignore ignore = fieldMate.getIgnore();
             if (ignore != null) {
-                if(ignore.read()) {
+                if (ignore.read()) {
                     continue;
                 }
             }
