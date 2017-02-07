@@ -6,6 +6,8 @@ import com.duoec.commons.mongo.reflection.dto.ClassMate;
 import com.duoec.commons.mongo.reflection.dto.FieldMate;
 import org.junit.Assert;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
@@ -22,6 +24,7 @@ import java.util.Map;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = "classpath:/spring-context.xml")
 public class BaseJunitTest {
+    private static final Logger logger = LoggerFactory.getLogger(BaseJunitTest.class);
 
     /**
      * 比较两对象是否一致
@@ -61,9 +64,9 @@ public class BaseJunitTest {
             for (Map.Entry<String, FieldMate> entry : classMate1.getFieldMateMap().entrySet()) {
                 Object fieldVal1 = ReflectionUtils.getField(entry.getValue(), doc1);
                 Object fieldVal2 = ReflectionUtils.getField(entry.getValue(), doc2);
+                logger.debug("check: " + entry.getKey() + "=" + fieldVal1);
                 assertEquals(fieldVal1, fieldVal2);
             }
         }
-
     }
 }

@@ -52,21 +52,22 @@ public class ReflectionUtils {
 
         for (PropertyDescriptor pd : beanInfo.getPropertyDescriptors()) {
             String fieldName = pd.getName();
-            if ("class".equals(fieldName)) {
+
+            Method setterMethod = pd.getWriteMethod();
+            Method getterMethod = pd.getReadMethod();
+            if(setterMethod == null || getterMethod == null) {
                 continue;
             }
+
             FieldMate fieldMate = getFieldMate(classMate, clazz, fieldName);
             if (fieldMate == null) {
                 continue;
             }
-
-            Method setterMethod = pd.getWriteMethod();
             if (setterMethod != null) {
                 MethodMate setterMate = getMethodMate(fieldMate, setterMethod);
                 fieldMate.setSetter(setterMate);
             }
 
-            Method getterMethod = pd.getReadMethod();
             if (getterMethod != null) {
                 MethodMate getterMate = getMethodMate(fieldMate, getterMethod);
                 fieldMate.setGetter(getterMate);

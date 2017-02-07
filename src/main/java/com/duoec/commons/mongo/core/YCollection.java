@@ -659,11 +659,16 @@ public abstract class YCollection<TDocument> {
                 }
             }
 
-            logger.info("慢查询:{}ms, {}." + message, paramList.toArray());
+            logger.warn("慢查询:{}ms, {}." + message, paramList.toArray());
         }
     }
 
     private CodecRegistry getCodecRegistry(final Class registryClass) {
+        if (registryClass == Document.class) {
+            //Document
+            return MongoClient.getDefaultCodecRegistry();
+        }
+
         ClassMate classMate = ReflectionUtils.getClassMate(registryClass);
         List<CodecRegistry> codecRegistryList = Lists.newArrayList();
         classMate.getReferClassList().forEach(clazz -> {
@@ -723,6 +728,10 @@ public abstract class YCollection<TDocument> {
                 return client;
             }
         };
+    }
+
+    public <NewDocument> MongoCollection<NewDocument> getDocumentMongoCollection(Class<NewDocument> clazz) {
+        return getDocumentMongoCollection(getDatabaseName(), getCollectionName(), clazz);
     }
 
     public <NewDocument> MongoCollection<NewDocument> getDocumentMongoCollection(String databaseName, String collectionName, Class<NewDocument> clazz) {

@@ -25,7 +25,6 @@ public class MongoConverterTest extends BaseJunitTest{
 
         House house2 = MongoConverter.toEntity(doc, House.class);
         assertEquals(house, house2);
-        System.out.println(house.getBasicInfo().getHouseName());
     }
 
     /**
