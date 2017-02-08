@@ -9,6 +9,8 @@ import com.duoec.commons.mongo.reflection.dto.FieldMate;
 import com.google.common.collect.Lists;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 
@@ -20,17 +22,57 @@ import java.util.List;
 public abstract class BaseEntityDao<T> extends YCollection<T> {
 
     public static final String ID = "_id";
+    /**
+     * 通过ID获取对象
+     * @param id
+     * @param <IDType>
+     * @return
+     */
+    public <IDType> T getById(IDType id) {
+        return find(Filters.eq("_id", id))
+                .first();
+    }
+
+    public <IDType> T getById(IDType id, Bson projections) {
+        if (projections == null) {
+            return getById(id);
+        }
+        return find(Filters.eq("_id", id))
+                .projection(projections)
+                .first();
+    }
+
+    /**
+     * 通过ID进行修改
+     * @param id
+     * @param update
+     * @return
+     */
+    public UpdateResult updateById(Object id, Bson update) {
+        return updateOne(Filters.eq("_id", id), update, new UpdateOptions());
+    }
 
     /**
      * 通过查询条件更新一条记录，更新仅对设置有值的字段进行修改，不$unset为空的字段
      * 如果需要$unset为空字段，请使用update(T entity)方法
-     *
-     * @param query
+     *  @param query
      * @param entity
      */
-    public void updateOne(Bson query, T entity) {
+    public UpdateResult updateOne(Bson query, T entity) {
         Document doc = getDocument(entity, MongoConverter.OPTION_UPDATE);
-        super.updateOne(query, new Document("$set", doc));
+        return super.updateOne(query, new Document("$set", doc));
+    }
+
+    /**
+     * 通过实体ID去更新
+     * @param entity
+     * @return
+     */
+    public UpdateResult updateOneByEntityId(T entity) {
+        ClassMate classMate = ReflectionUtils.getClassMate(entity.getClass());
+        FieldMate idFieldMate = classMate.getFieldMate("id");
+        Object id = ReflectionUtils.getField(idFieldMate, entity);
+        return updateOne(Filters.eq("_id", id), entity);
     }
 
     /**

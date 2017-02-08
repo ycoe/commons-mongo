@@ -150,7 +150,9 @@ public class ReflectionUtils {
             fieldMate.setGenericType(fieldType);
             fieldMate.setMap(true);
             fieldMate.setSimpleType(false);
-        } else if (!ClassUtils.isSimpleType(fieldType)) {
+        }
+
+        if (!ClassUtils.isSimpleType(fieldType)) {
             ClassMate fieldTypeMate = analyse(fieldType);
             fieldTypeMate.getReferClassList().forEach(referClass -> classMate.addReferClass(referClass));
             fieldMate.setSimpleType(false);
