@@ -32,16 +32,32 @@ import java.util.List;
 public abstract class YCollection<TDocument> {
     private static final Logger logger = LoggerFactory.getLogger(YCollection.class);
 
-    protected static final long SLOW_QUERY_TIME = 80;
+    protected static final long SLOW_QUERY_TIME = 800;
 
     private MongoCollection<TDocument> mongoCollection;
 
+    /**
+     * 获取数据库名称
+     * @return
+     */
     protected abstract String getDatabaseName();
 
+    /**
+     * 获取Collection名称
+     * @return
+     */
     protected abstract String getCollectionName();
 
+    /**
+     * 获取Collection对应的JavaBean类
+     * @return
+     */
     protected abstract Class<TDocument> getDocumentClass();
 
+    /**
+     * 获取终端连接配置
+     * @return
+     */
     protected abstract YMongoClient getYMongoClient();
 
     public String getNamespace() {
@@ -221,7 +237,7 @@ public abstract class YCollection<TDocument> {
      */
     public <TResult> AggregateIterable<TResult> aggregate(List<? extends Bson> pipeline, Class<TResult> resultClass) {
         long t1 = System.currentTimeMillis();
-        AggregateIterable iterable = getDocumentMongoCollection().aggregate(pipeline, resultClass);
+        AggregateIterable iterable = getDocumentMongoCollection(resultClass).aggregate(pipeline, resultClass);
 
         slowLog(
                 System.currentTimeMillis() - t1,
@@ -532,7 +548,7 @@ public abstract class YCollection<TDocument> {
      */
     public UpdateResult updateMany(Bson filter, Bson update, UpdateOptions updateOptions) {
         long t1 = System.currentTimeMillis();
-        UpdateResult result = getDocumentMongoCollection().updateOne(filter, update, updateOptions);
+        UpdateResult result = getDocumentMongoCollection().updateMany(filter, update, updateOptions);
 
         slowLog(
                 System.currentTimeMillis() - t1,
@@ -669,9 +685,11 @@ public abstract class YCollection<TDocument> {
             return MongoClient.getDefaultCodecRegistry();
         }
 
+        logger.info("codec regist: {}", registryClass.getName());
         ClassMate classMate = ReflectionUtils.getClassMate(registryClass);
         List<CodecRegistry> codecRegistryList = Lists.newArrayList();
         classMate.getReferClassList().forEach(clazz -> {
+            logger.info("\t{}", clazz.getName());
             CodecRegistry codecProvider = CodecRegistries.fromProviders(new CodecProvider() { // NOSONAR
                 @Override
                 public <D> Codec<D> get(Class<D> clazz, CodecRegistry registry) {
@@ -697,7 +715,7 @@ public abstract class YCollection<TDocument> {
      *
      * @return
      */
-    public MongoCollection getDocumentMongoCollection() {
+    private MongoCollection getDocumentMongoCollection() {
         if (mongoCollection == null) {
             mongoCollection = getDocumentMongoCollection(getDatabaseName(), getCollectionName(), getDocumentClass());
         }
