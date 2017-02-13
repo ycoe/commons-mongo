@@ -1,0 +1,1 @@
+`BaseEntityDao`类是`YCollection`类的扩展，添加了各简化业务操作的方法

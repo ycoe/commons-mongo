@@ -1,0 +1,1 @@
+此类是对YCollection.updateOne的扩展，
