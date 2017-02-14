@@ -364,6 +364,15 @@ public class YCollectionTest extends BaseJunitTest {
     }
 
     @Test
+    public void findOneAndUpdate(){
+        Document set = new Document("location.cityId", 1337);
+        Document updateData = new Document("$set", set)
+                .append("$inc", new Document("viewCount", 1));
+        House house2 = houseDao.findOneAndUpdate(Filters.eq("basicInfo.houseName", "测试楼盘"), updateData);
+        //在筛选阶段，就会只查出命中的第一条记录，所以这里打印出来的更新数量是1，但实际查询条件命中的不只一条记录！
+    }
+
+    @Test
     public void encode() {
         List<Long> houseIds = Lists.newArrayList();
         houseDao.find(new Document())

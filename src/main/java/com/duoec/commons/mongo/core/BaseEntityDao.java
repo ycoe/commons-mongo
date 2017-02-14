@@ -7,6 +7,7 @@ import com.duoec.commons.mongo.reflection.dto.AutoIncrementInfo;
 import com.duoec.commons.mongo.reflection.dto.ClassMate;
 import com.duoec.commons.mongo.reflection.dto.FieldMate;
 import com.google.common.collect.Lists;
+import com.mongodb.MongoException;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.UpdateOptions;
@@ -22,56 +23,43 @@ import java.util.List;
 public abstract class BaseEntityDao<T> extends YCollection<T> {
 
     public static final String ID = "_id";
-    /**
-     * 通过ID获取对象
-     * @param id
-     * @param <IDType>
-     * @return
-     */
-    public <IDType> T getById(IDType id) {
-        return find(Filters.eq("_id", id))
-                .first();
-    }
-
-    public <IDType> T getById(IDType id, Bson projections) {
-        if (projections == null) {
-            return getById(id);
-        }
-        return find(Filters.eq("_id", id))
-                .projection(projections)
-                .first();
-    }
 
     /**
      * 通过ID进行修改
+     *
      * @param id
      * @param update
      * @return
      */
-    public UpdateResult updateById(Object id, Bson update) {
+    public <IDType> UpdateResult updateById(IDType id, Bson update) {
         return updateOne(Filters.eq("_id", id), update, new UpdateOptions());
     }
 
     /**
      * 通过查询条件更新一条记录，更新仅对设置有值的字段进行修改，不$unset为空的字段
      * 如果需要$unset为空字段，请使用update(T entity)方法
-     *  @param query
+     *
+     * @param query
      * @param entity
      */
     public UpdateResult updateOne(Bson query, T entity) {
         Document doc = getDocument(entity, MongoConverter.OPTION_UPDATE);
-        return super.updateOne(query, new Document("$set", doc));
+        return super.updateOne(query, new Document("$set", doc), new UpdateOptions());
     }
 
     /**
      * 通过实体ID去更新
+     *
      * @param entity
      * @return
      */
-    public UpdateResult updateOneByEntityId(T entity) {
+    public UpdateResult updateEntitySafe(T entity) {
         ClassMate classMate = ReflectionUtils.getClassMate(entity.getClass());
         FieldMate idFieldMate = classMate.getFieldMate("id");
         Object id = ReflectionUtils.getField(idFieldMate, entity);
+        if (id == null) {
+            throw new MongoException("id不能为空！");
+        }
         return updateOne(Filters.eq("_id", id), entity);
     }
 
@@ -79,15 +67,18 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
      * 本方法仅会更新实体内定义且未被标识为@Ignore(update=true)的字段
      * 如果属性值为空，则会被删除
      * 嵌套document/list会被直接覆盖
-     * 如果不需要清空，请使用updateOne()方法！
+     * 如果不需要清空，updateEntitySafe()方法！
      *
      * @param entity
      */
-    public void update(T entity) {
+    public void updateEntity(T entity) {
         Class clazz = entity.getClass();
         ClassMate classMate = ReflectionUtils.getClassMate(clazz);
         FieldMate fieldMate = classMate.getFieldMate("id");
         Object id = ReflectionUtils.getField(fieldMate, entity);
+        if (id == null) {
+            throw new MongoException("id不能为空！");
+        }
         Document updateData = MongoConverter.getUpdateDocument(entity);
         updateOne(Filters.eq(ID, id), updateData);
     }
@@ -117,11 +108,11 @@ public abstract class BaseEntityDao<T> extends YCollection<T> {
         return doc;
     }
 
-    public T getEntityById(Object id) {
+    public <IDType> T getEntityById(IDType id) {
         return getEntityById(id, null);
     }
 
-    public T getEntityById(Object id, Bson projection) {
+    public <IDType> T getEntityById(IDType id, Bson projection) {
         return getEntity(Filters.eq(ID, id), projection);
     }
 

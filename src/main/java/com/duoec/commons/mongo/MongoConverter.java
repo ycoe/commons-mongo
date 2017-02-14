@@ -221,7 +221,7 @@ public class MongoConverter {
                     value = toListDocument((List) value, options);
                 } else if (fieldMate.isMap()) {
                     //Map
-                    value = toMapDocument((Map) value);
+                    value = toMapDocument((Map) value, options);
                 } else {
                     //普通实体
                     value = toDocument(value, false, options);
@@ -239,13 +239,18 @@ public class MongoConverter {
         return doc;
     }
 
-    private static Document toMapDocument(Map value) {
+    private static Document toMapDocument(Map value, int options) {
         Document doc = new Document();
         value.keySet().forEach(key -> {
             if (key.getClass() != String.class) {
                 return;
             }
-            doc.put(key.toString(), value.get(key));
+            Object val = value.get(key);
+            if(!ClassUtils.isSimpleType(val.getClass())) {
+                //如果不是基本数据类型时
+                val = toDocument(val, false, options);
+            }
+            doc.put(key.toString(), val);
         });
         if (doc.isEmpty()) {
             return null;
@@ -261,8 +266,12 @@ public class MongoConverter {
         List listDoc = Lists.newArrayList();
         for (Object item : value) {
             if (ClassUtils.isSimpleType(item.getClass())) {
+                //如果是基本类型
+                listDoc.add(item);
                 continue;
             }
+
+            //非基本类型
             Document doc = toDocument(item, false, options);
             if (doc != null) {
                 listDoc.add(doc);

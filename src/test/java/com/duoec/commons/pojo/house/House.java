@@ -30,7 +30,6 @@ public class House {
     /**
      * 推荐理由
      */
-    @Ignore
     private String recommendReason;
 
     /**
